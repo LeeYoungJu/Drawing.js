@@ -19,6 +19,7 @@ function stopEvent(e) {
 var Drawing = {
 	canvas: null,
 	ctx: null,
+	canvasId: "drawingCanvas",
 	
 	lineWidth: 1,
 	strokeType: "freeLine",
@@ -43,13 +44,14 @@ var Drawing = {
 	
 	drawingSurfaceData: null,
 		
-	init: function(boxTag, canvasTag, width, height, imgSrc) {
+	init: function(boxTag, width, height, imgSrc) {
 		this.width = width;
 		this.height = height;
 		
+		$("#"+boxTag).width(this.width);
 		$("#"+boxTag).append(this.makeToolBox()).append(this.makeCanvas());
 		
-		this.canvas = document.getElementById(canvasTag);
+		this.canvas = document.getElementById(this.canvasId);
 		this.ctx = this.canvas.getContext("2d");
 		
 		if(imgSrc != null && imgSrc.trim() != "") {
@@ -186,7 +188,7 @@ var Drawing = {
 	
 	makeCanvas: function() {		
 		var canvas = "";
-		canvas += "<canvas id='drawingCanvas' width='"+this.width+"' height='"+this.height+"' style='"+this.canvasStyle+"'>";
+		canvas += "<canvas id='"+this.canvasId+"' width='"+this.width+"' height='"+this.height+"' style='"+this.canvasStyle+"'>";
 		canvas += "</canvas>";
 		return canvas;
 	},
