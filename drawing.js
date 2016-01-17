@@ -21,15 +21,19 @@ var Drawing = {
 	ctx: null,
 	canvasId: "drawingCanvas",
 	
+	$boxTag: null,
+	name: "",
+	
 	lineWidth: 1,
 	strokeType: "freeLine",
 	
 	width: "",
 	height: "",
-	
+		
 	canvasStyle: "border:2px solid gray;",
-	toolBtnStyle: "float:left; cursor:pointer; padding:2px; border:1px solid gray;",
-	toolBtnStyle2: "float:left; cursor:pointer; padding:2px; border:1px solid gray; width: 15px; text-align: center;",
+	
+	toolBtnStyle: "float:left; cursor:pointer; padding:2px; border:1px solid black; width:20px; height:20px; background-size: 24px;",
+	toolBtnStyle2: "float:left; cursor:pointer; padding:2px; border:1px solid black; width: 20px; height:20px; text-align: center;",	
 	
 	isMouseDown: false,
 	radius: 1,
@@ -43,19 +47,32 @@ var Drawing = {
 	eraseY: 0,
 	
 	drawingSurfaceData: null,
+	
+	imgUrlPath: "",
 		
 	init: function(boxTag, width, height, imgSrc) {
+		var tempSrc = $("script[src*=drawing\\.js]").attr("src");
+		
+		var tempSrcArr = tempSrc.split("/");
+		for(var i=0; i<tempSrcArr.length-1; i++) {			
+			this.imgUrlPath += tempSrcArr[i] + "/";
+		}
+		this.imgUrlPath += "img/";		
+		
 		this.width = width;
 		this.height = height;
 		
-		$("#"+boxTag).width(this.width);
-		$("#"+boxTag).append(this.makeToolBox()).append(this.makeCanvas());
+		this.$boxTag = $("#"+boxTag);
+		this.name = this.$boxTag.attr("name");
+		
+		this.$boxTag.width(this.width);
+		this.$boxTag.append(this.makeToolBox()).append(this.makeCanvas()).append(this.makeHiddenInput(this.name));
 		
 		this.canvas = document.getElementById(this.canvasId);
 		this.ctx = this.canvas.getContext("2d");
 		
 		if(imgSrc != null && imgSrc.trim() != "") {
-			$("#"+boxTag).append("<img style='display:none;' onload='Drawing.whenLoadImage(this)' id='imgInCanvas' src='"+imgSrc+"' />")
+			this.$boxTag.append("<img style='display:none;' onload='Drawing.whenLoadImage(this)' id='imgInCanvas' src='"+imgSrc+"' />")
 			//var img=document.getElementById("imgInCanvas");
 		}
 		
@@ -130,15 +147,15 @@ var Drawing = {
 				break;
 			case "eraser":				
 				oThis.eraser();
-				oThis.saveDrawingSurface();
+				//oThis.saveDrawingSurface();
 				break;
 			}	
 		} else {			
 			switch(oThis.strokeType) {				
 			case "eraser":
-				oThis.restoreDrawingSurface();
-				
-				oThis.eraser();		
+				//oThis.restoreDrawingSurfaceAll();				
+				oThis.restoreDrawingSurfaceWhenEraser();
+				oThis.eraserWhenNoAction();		
 				break;
 			}
 			
@@ -149,7 +166,21 @@ var Drawing = {
 		var oThis = Drawing;
 		oThis.drawingSurfaceData = oThis.ctx.getImageData(0, 0, oThis.canvas.width, oThis.canvas.height);
 	},
-	restoreDrawingSurface: function() {
+	restoreDrawingSurfaceWhenEraser: function() {
+		var oThis = Drawing;
+		
+		var ratioW = oThis.drawingSurfaceData.width / oThis.canvas.width;
+		var ratioH = oThis.drawingSurfaceData.height / oThis.canvas.height;
+		
+		var width = oThis.eraseWidth*ratioW;
+		var height = oThis.eraseHeight*ratioH;
+		
+		oThis.ctx.putImageData(oThis.drawingSurfaceData, 0, 0
+				, (oThis.eraseX-width/2)-1, (oThis.eraseY-height/2)-1
+				, Number(width)+2, Number(height)+2);
+	},
+	
+	restoreDrawingSurfaceAll: function() {
 		var oThis = Drawing;
 		oThis.ctx.putImageData(oThis.drawingSurfaceData, 0, 0);
 	},
@@ -186,25 +217,48 @@ var Drawing = {
 		oThis.eraseY = oThis.loc.y;
 	},
 	
-	makeCanvas: function() {		
+	eraserWhenNoAction: function() {		
+		var oThis = Drawing;		
+		oThis.ctx.strokeStyle = "gray";
+		oThis.ctx.lineWidth = "1";
+		oThis.ctx.beginPath();
+		//oThis.ctx.clearRect((oThis.eraseX-oThis.eraseWidth/2)-1, (oThis.eraseY-oThis.eraseHeight/2)-1, Number(oThis.eraseWidth)+2, Number(oThis.eraseHeight)+2);								
+		oThis.ctx.rect(oThis.loc.x-oThis.eraseWidth/2, oThis.loc.y-oThis.eraseHeight/2, oThis.eraseWidth, oThis.eraseHeight);				
+		oThis.ctx.closePath();
+		oThis.ctx.stroke();
+		oThis.eraseX = oThis.loc.x;
+		oThis.eraseY = oThis.loc.y;
+	},
+	
+	makeCanvas: function() {
 		var canvas = "";
 		canvas += "<canvas id='"+this.canvasId+"' width='"+this.width+"' height='"+this.height+"' style='"+this.canvasStyle+"'>";
 		canvas += "</canvas>";
 		return canvas;
 	},
 	
+	makeHiddenInput: function(name) {		
+		var input = "<input type='hidden' name='"+name+"' />";
+		return input;
+	},
+	
 	makeToolBox: function() {		
 		var div = "";
-		div += "<div style='width:100%;'>";
-		div += "<div class='toolBtn' onclick='Drawing.clickFreeLine(this)' style='"+this.toolBtnStyle+" background:red;'>freeLine</div>";
-		div += "<div id='txtFreelineWidth' class='toolBtn2' onclick='' style='"+this.toolBtnStyle2+"'>"+this.lineWidth+"</div>";
-		div += "<div class='toolBtn2' onclick='Drawing.clickPlusBtn(\"freeline\")' style='"+this.toolBtnStyle2+"'>+</div>";
-		div += "<div class='toolBtn2' onclick='Drawing.clickMinusBtn(\"freeline\")' style='"+this.toolBtnStyle2+"'>-</div>";
-		div += "<div class='toolBtn' onclick='Drawing.clickEraser(this)' style='"+this.toolBtnStyle+"'>eraser</div>";
-		div += "<div id='txtEraserWidth' class='toolBtn2' onclick='' style='"+this.toolBtnStyle2+"'>"+this.lineWidth+"</div>";
-		div += "<div class='toolBtn2' onclick='Drawing.clickPlusBtn(\"eraser\")' style='"+this.toolBtnStyle2+"'>+</div>";
-		div += "<div class='toolBtn2' onclick='Drawing.clickMinusBtn(\"eraser\")' style='"+this.toolBtnStyle2+"'>-</div>";
-		div += "<div class='toolBtn' onclick='Drawing.clickEraseAll(this)' style='"+this.toolBtnStyle+"'>eraseAll</div>";		
+		div += "<div style='width:100%;'>";		
+			div += "<div style='float:left; margin-right:10px;'>";
+				div += "<div class='toolBtn' onclick='Drawing.clickFreeLine(this)' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"pencil.png\"); border-width:3px;'></div>";		
+				div += "<div class='toolBtn' onclick='Drawing.clickEraser(this)' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"eraser.png\");'></div>";
+			div += "</div>";
+			
+			div += "<div style='float:left; margin-right:10px;'>";				
+				div += "<div class='toolBtn2' onclick='Drawing.clickPlusBtn()' style='"+this.toolBtnStyle2+"'>+</div>";
+				div += "<div class='toolBtn2' onclick='Drawing.clickMinusBtn()' style='"+this.toolBtnStyle2+"'>-</div>";
+				div += "<div id='txtWidth' class='toolBtn2' onclick='' style='"+this.toolBtnStyle2+"'>"+this.lineWidth+"</div>";
+			div += "</div>";
+			
+			div += "<div style='float:left; margin-right:10px;'>";
+				div += "<div class='toolBtn' onclick='Drawing.clickEraseAll(this)' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"eraseAll.png\");'></div>";
+			div += "</div>";
 		div += "</div>";
 		
 		return div;
@@ -215,6 +269,8 @@ var Drawing = {
 		oThis.strokeType = "freeLine";
 		oThis.resetToolBtn();
 		oThis.whenSelectBtn($(pThis));
+				
+		oThis.resetTxtWidth(oThis.lineWidth);
 				
 		oThis.ctx.beginPath();
 		oThis.ctx.clearRect((oThis.eraseX-oThis.eraseWidth/2)-1, (oThis.eraseY-oThis.eraseHeight/2)-1, Number(oThis.eraseWidth)+2, Number(oThis.eraseHeight)+2);
@@ -234,52 +290,65 @@ var Drawing = {
 		oThis.resetToolBtn();
 		oThis.whenSelectBtn($(pThis));
 		
+		oThis.resetTxtWidth(oThis.eraseWidth);		
+		
 		oThis.saveDrawingSurface();
 	},
 	
-	clickPlusBtn: function(type) {
+	clickPlusBtn: function() {
 		oThis = Drawing;
-		switch(type) {
-		case "freeline":
+		switch(oThis.strokeType) {
+		case "freeLine":
 			oThis.lineWidth++;
-			oThis.resetTxtFreelineWidth();
+			oThis.resetTxtWidth(oThis.lineWidth);
 			break;
 		case "eraser":
 			oThis.eraseWidth++;
 			oThis.eraseHeight++;
-			oThis.resetTxtEraserWidth();
+			oThis.resetTxtWidth(oThis.eraseWidth);
 			break;
 		}
 	},
 	
-	clickMinusBtn: function(type) {
+	clickMinusBtn: function() {
 		oThis = Drawing;
-		switch(type) {
-		case "freeline":
+		switch(oThis.strokeType) {
+		case "freeLine":
 			oThis.lineWidth--;
-			oThis.resetTxtFreelineWidth();
+			oThis.resetTxtWidth(oThis.lineWidth);
 			break;
 		case "eraser":
 			oThis.eraseWidth--;
 			oThis.eraseHeight--;
-			oThis.resetTxtEraserWidth();
+			oThis.resetTxtWidth(oThis.eraseWidth);
 			break;
 		}
 	},
 	
-	resetTxtFreelineWidth: function() {
-		$("#txtFreelineWidth").text(oThis.lineWidth);
-	},
-	resetTxtEraserWidth: function() {
-		$("#txtEraserWidth").text(oThis.eraseWidth);
-	},
+	resetTxtWidth: function(width) {
+		$("#txtWidth").text(width);
+	},	
 	
 	resetToolBtn: function() {
-		$(".toolBtn").css("background", "white");
+		$(".toolBtn").css("border-width", "1px");
 	},
 	
 	whenSelectBtn: function($btn) {
-		$btn.css("background", "red");
+		$btn.css("border-width", "3px");
+	},
+	
+	setImgByte: function() {
+		var canvas = document.getElementById(this.canvasId);
+		var imgData = canvas.toDataURL("image/png");
+		imgData = imgData.replace("data:image/png;base64,", "");
+		this.$boxTag.find("input:hidden[name="+this.name+"]").val(imgData);
+	},
+	
+	save: function(formTag) {
+		this.setImgByte();
+		var $form = $("#"+formTag);
+		
+		$form.submit();
 	}
 	
 }
