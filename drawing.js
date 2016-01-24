@@ -70,7 +70,7 @@ Pencel.prototype.setColor = function(color) {
 Pencel.prototype.afterDraw = function(e) {
 	
 }
-Pencel.prototype.foucusOut = function(e) {
+Pencel.prototype.focusOut = function(e) {
 	
 }
 Pencel.prototype.move = function(e) {
@@ -129,7 +129,7 @@ Eraser.prototype.afterDraw = function(e) {
 	this.ctx.closePath();
 	this.saveDrawingSurface();
 }
-Eraser.prototype.foucusOut = function(e) {
+Eraser.prototype.focusOut = function(e) {
 	this.ctx.beginPath();
 	this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);				
 	this.ctx.closePath();
@@ -276,7 +276,7 @@ Drawing.prototype.bindEvents = function() {
 	$(oThis.canvas).mouseleave(function(e) {
 		oThis.isMouseDown = false;
 		
-		oThis.currentTool.foucusOut();		
+		oThis.currentTool.focusOut();		
 	});
 	
 	$("#freeLineBtn_"+oThis.canvasId).click(function() {
