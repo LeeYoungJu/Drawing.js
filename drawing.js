@@ -30,8 +30,6 @@ var Pencel = function(parent, canvas, ctx) {
 	this.preX = 0;
 	this.preY = 0;
 	this.loc = null;
-	
-	this.color = "#000000";
 }
 
 Pencel.prototype.init = function(e) {
@@ -40,13 +38,12 @@ Pencel.prototype.init = function(e) {
 	this.preY = this.loc.y;	
 }
 
-Pencel.prototype.draw = function(e) {
-	console.log('aaa');
+Pencel.prototype.draw = function(e) {	
 	var oThis = this;
 	
 	oThis.loc = windowToCanvas(oThis.canvas, e.clientX, e.clientY);
 	
-	oThis.ctx.strokeStyle = this.color;		
+	oThis.ctx.strokeStyle = this.parent.getColor();		
 	oThis.ctx.lineWidth = oThis.lineWidth;
 
 	oThis.ctx.beginPath();
@@ -61,10 +58,6 @@ Pencel.prototype.draw = function(e) {
 
 	oThis.preX = oThis.loc.x;
 	oThis.preY = oThis.loc.y;
-}
-
-Pencel.prototype.setColor = function(color) {
-	this.color = color;
 }
 
 Pencel.prototype.afterDraw = function(e) {
@@ -121,6 +114,7 @@ Eraser.prototype.draw = function(e) {
 	this.eraseX = this.loc.x;
 	this.eraseY = this.loc.y;
 }
+
 Eraser.prototype.afterDraw = function(e) {
 	this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
 	this.ctx.beginPath();
@@ -203,6 +197,7 @@ var Drawing = function(boxTag, width, height, imgSrc) {
 	this.width = width;
 	this.height = height;
 	
+	this.color = "#000000";
 	this.colorArr = [
          ["#FF0000", "#FFD8D8", "#FFA7A7", "#F15F5F", "#CC3D3D", "#980000", "#670000"]
          , ["#FF5E00", "#FAE0D4", "#FFC19E", "#F29661", "#CC723D", "#993800", "#662500"]	                
@@ -244,6 +239,10 @@ var Drawing = function(boxTag, width, height, imgSrc) {
 
 Drawing.prototype.init = function() {
 	this.bindEvents();
+}
+
+Drawing.prototype.getColor = function() {
+	return this.color;
 }
 
 Drawing.prototype.getSurfaceData = function() {
@@ -308,9 +307,8 @@ Drawing.prototype.bindEvents = function() {
 	});
 	
 	oThis.$box.find(".colorDiv").click(function(e) {
-		var color = $(this).attr('id');		
-		oThis.currentTool.setColor(color);
-		$("#colorBtn_"+oThis.canvasId).css('background', color);
+		oThis.color = $(this).attr('id'); 
+		$("#colorBtn_"+oThis.canvasId).css('background', oThis.color);
 		$("#colorBox_"+oThis.canvasId).hide();
 	});
 }
@@ -318,7 +316,8 @@ Drawing.prototype.bindEvents = function() {
 Drawing.prototype.whenMouseDown = function(e) {
 	this.currentTool.init(e);
 			
-	this.isMouseDown = true;		
+	this.isMouseDown = true;	
+	$("#colorBox_"+this.canvasId).hide();
 }
 Drawing.prototype.whenMouseUp = function(e) {
 	var oThis = this;
@@ -376,11 +375,11 @@ Drawing.prototype.makeToolBox = function() {
 		
 		div += "<div style='float:left; margin-right:10px; position:relative;'>";
 			div += "<div class='toolBtn' id='colorBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background:black;'></div>";
-			div += "<div id='colorBox_"+this.canvasId+"' style='display:none; position:absolute; top:26px; width:300px;'>";			
+			div += "<div id='colorBox_"+this.canvasId+"' style='display:none; position:absolute; top:26px; width:240px;'>";			
 			for(var i=0; i<this.colorArr.length; i++) {
 				div += "<div style='float:left;background:white;'>";				
 				for(var j=0; j<this.colorArr[i].length; j++) {
-					div += "<div class='colorDiv' style='margin:0 1px 1px 0; width:16px; height:16px; background:"+this.colorArr[i][j]+";' id='"+this.colorArr[i][j]+"'></div>";
+					div += "<div class='colorDiv' style='cursor:pointer;margin:0 1px 1px 0; width:16px; height:16px; background:"+this.colorArr[i][j]+";' id='"+this.colorArr[i][j]+"'></div>";
 				}
 				div += "</div>";
 			}
