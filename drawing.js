@@ -18,6 +18,303 @@ function stopEvent(e) {
     }
 }
 
+/** Text Class **/
+var Text = function(parent, canvas, ctx) {
+	this.parent = parent;
+	this.canvas = canvas;
+	this.ctx = ctx;
+	
+	this.lineWidth = 20;	
+	this.fontType = 'Arial';
+	this.ctx.font=this.lineWidth+'px '+this.fontStyle;
+	
+	this.preX = 0;
+	this.preY = 0;
+	this.loc = null;
+	
+	this.preCursorObj = null;
+	this.cursorObj = null;
+	this.blinkingInterval = null;
+	this.cursorX = 0;
+	this.cursorY = 0;
+	this.cursorObj = new TextCursor(2, "black", this.parent, this.ctx, this.canvas);
+	this.textLineObj = null;
+}
+
+Text.prototype = {
+		init: function(e) {	
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			this.preX = this.loc.x;
+			this.preY = this.loc.y;
+						
+			this.moveCursor(this.loc.x, this.loc.y);
+			this.textLineObj = new TextLine(this.loc.x, this.loc.y, this.lineWidth, this.parent, this);
+			this.textLineObj.init(this.ctx);
+			//this.ctx.putImageData(this.parent.getSurfaceData(), 0, 0);
+						
+		},
+		
+		draw: function(e) {		
+			/*
+			this.restoreDrawingSurface();
+			
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			
+			this.ctx.strokeStyle = "gray";		
+			this.ctx.lineWidth = 0.5;
+	
+			this.ctx.beginPath();    
+			this.ctx.rect(this.preX, this.preY, this.loc.x-this.preX, this.loc.y-this.preY);	
+			this.ctx.closePath();
+			
+			this.ctx.stroke();
+			*/	
+		},
+		
+		afterDraw: function(e) {
+			//this.cursorObj = new TextCursor(2, "black", this.parent, this.ctx, this.canvas);
+			//this.cursorX = this.preX+3;
+			//this.cursorY = this.preY+3;
+			//this.moveCursor(this.cursorX, this.cursorY);
+		},
+		
+		moveCursor: function(cursorX, cursorY) {
+			this.cursorObj.erase();
+			this.saveDrawingSurface();	
+			console.log("save");
+			this.cursorObj.draw(cursorX, cursorY);			
+			
+			
+			this.blinkCursor(cursorX, cursorY);			
+		},
+		
+		blinkCursor: function(cursorX, cursorY) {
+			var oThis = this;
+			clearInterval(oThis.blinkingInterval);
+			oThis.blinkingInterval = setInterval(function(e) {
+				oThis.cursorObj.erase();
+				setTimeout(function(e) {
+					oThis.cursorObj.draw(cursorX, cursorY);
+				}, 300);
+			}, 1000);			
+		},
+		
+		focusOut: function(e) {
+			
+		},
+		
+		move: function(e) {
+			
+		},
+		
+		saveDrawingSurface: function() {	
+			this.parent.setSurfaceData(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));	
+		},
+		
+		restoreDrawingSurface: function() {	
+			var drawingSurfaceData = this.parent.getSurfaceData();
+			var ratioW = drawingSurfaceData.width / this.canvas.width;
+			var ratioH = drawingSurfaceData.height / this.canvas.height;
+			
+			var width = this.lineWidth*ratioW;
+			var height = this.lineWidth*ratioH;
+			
+			this.ctx.putImageData(this.parent.getSurfaceData(), 0, 0
+					, this.preX-1, this.preY-1
+					, this.loc.x-this.preX+1, this.loc.y-this.preY+1);
+		},
+		
+		incLineWidth: function() {
+			this.lineWidth++;
+			this.setContextFontStyle();
+		},
+		
+		decLineWidth: function() {
+			this.lineWidth--;
+			this.setContextFontStyle();
+		},
+		
+		setFontType: function(type) {
+			this.fontType = type;
+		},
+		
+		setContextFontStyle: function() {
+			this.ctx.font=this.lineWidth+'px '+this.fontStyle;
+		},
+		
+		finish: function() {
+			var oThis = this;			
+			if(this.blinkingInterval) {				
+				clearInterval(this.blinkingInterval);
+				this.blinkingInterval = null;
+				setTimeout(function() {
+					oThis.cursorObj.erase();
+				}, 1000);
+			}
+			this.textLineObj.finish();
+		}
+}
+
+/** TextLine Class **/
+var TextLine = function(x, y, fontSize, parent, textObj) {
+	this.text = '';
+	this.left = x;
+	this.top = y;
+	this.caret = 0;
+	this.parent = parent;
+	this.textObj = textObj;
+	
+	this.fontSize = fontSize;
+}
+TextLine.prototype = {
+		init: function(ctx) {
+			var drawingSurfaceData = this.parent.getSurfaceData();
+			
+			var oThis = this
+			document.onkeydown = function(e) {
+				if(e.keyCode === 8 || e.keyCode === 13) {
+					e.preventDefault();
+				}
+				
+				if(e.keyCode === 8) {
+					ctx.save();
+					
+					oThis.erase(ctx, drawingSurfaceData);
+					oThis.removeCharacterBeforeCaret();
+					oThis.textObj.moveCursor(oThis.left+oThis.getWidth(ctx), oThis.top);
+					
+					oThis.draw(ctx);
+					ctx.restore();
+				}
+			}
+			
+			document.onkeypress = function(e) {
+				var key = String.fromCharCode(e.which);
+				
+				if(e.keyCode !== 8 && !e.ctrlKey && !e.metaKey) {
+					e.preventDefault();
+					
+					ctx.save();
+					
+					oThis.erase(ctx, drawingSurfaceData);
+					oThis.insert(key);
+					
+					oThis.textObj.moveCursor(oThis.left+oThis.getWidth(ctx), oThis.top);
+					/*
+					ctx.shadowColor = 'rgba(0,0,0,0.5)';
+					ctx.shadowOffsetX = 1;
+					ctx.shadowOffsetY = 1;
+					ctx.shadowBlur = 2;
+					*/
+					oThis.draw(ctx);
+					ctx.restore();
+				}
+			}
+		},
+		
+		insert: function(text) {
+			this.text = this.text.substr(0, this.caret) + text + this.text.substr(this.caret);
+			this.caret += text.length;
+		},
+		
+		removeCharacterBeforeCaret: function() {
+			if(this.caret === 0) {
+				return;
+			}
+			
+			this.text = this.text.substring(0, this.caret-1) + this.text.substring(this.caret);
+			this.caret--;
+		},
+		
+		getWidth: function(context) {
+			return context.measureText(this.text).width;
+		},
+		
+		getHeight: function(context) {
+			var h = context.measureText('W').width;
+			return h+h/6;
+		},
+		
+		draw: function(ctx) {
+			ctx.save();			
+			ctx.textAlign = 'start';
+			ctx.textBaseline = 'top';
+			
+			//ctx.strokeText(this.text, this.left, this.top);
+			ctx.fillText(this.text, this.left, this.top);
+			
+			ctx.restore();
+		},
+		
+		erase: function(context, imageData) {
+			context.putImageData(imageData, 0, 0);
+		},
+		
+		incFontSize: function() {
+			this.fontSize++;
+		},
+		
+		decFontSize: function() {
+			this.fontSize--;
+		},
+		
+		finish: function() {
+			document.onkeydown = null;
+			document.onkeypress = null;
+		}
+}
+
+/** TextCursor Class **/
+var TextCursor = function(width, fillStyle, parent, ctx, canvas) {
+	this.fillStyle = fillStyle || 'rgba(0,0,0,0.5)';
+	this.width = width || 2;
+	this.parent = parent;
+	this.ctx = ctx;
+	this.canvas = canvas;
+	this.left = 0;
+	this.top = 0;
+}
+
+TextCursor.prototype = {
+		getHeight: function() {
+			var h = this.ctx.measureText('W').width;
+			return h + h/6;
+		},
+		
+		createPath: function() {
+			this.ctx.beginPath();
+			this.ctx.rect(this.left, this.top,
+						 this.width, this.getHeight());
+		},
+		
+		draw: function(left, top) {
+			this.ctx.save();
+			
+			this.left = left;
+			//this.top = bottom - this.getHeight(context);
+			this.top = top;
+			
+			this.createPath();
+			
+			this.ctx.fillStyle = this.fillStyle;
+			this.ctx.fill();			
+			
+			this.ctx.restore();
+		},
+		
+		erase: function() {			
+			var drawingSurfaceData = this.parent.getSurfaceData();
+			var ratioW = drawingSurfaceData.width / this.canvas.width;
+			var ratioH = drawingSurfaceData.height / this.canvas.height;
+			
+			var width = this.width*ratioW;
+			var height = this.getHeight()*ratioH;
+			
+			this.ctx.putImageData(drawingSurfaceData, 0, 0,
+								  this.left, this.top, this.width, this.getHeight());
+		}
+}
+
 /** Pencil Class **/
 var Pencel = function(parent, canvas, ctx) {
 	this.parent = parent;
@@ -32,51 +329,55 @@ var Pencel = function(parent, canvas, ctx) {
 	this.loc = null;
 }
 
-Pencel.prototype.init = function(e) {
-	this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
-	this.preX = this.loc.x;
-	this.preY = this.loc.y;	
-}
-
-Pencel.prototype.draw = function(e) {	
-	var oThis = this;
-	
-	oThis.loc = windowToCanvas(oThis.canvas, e.clientX, e.clientY);
-	
-	oThis.ctx.strokeStyle = this.parent.getColor();		
-	oThis.ctx.lineWidth = oThis.lineWidth;
-
-	oThis.ctx.beginPath();
-    //oThis.ctx.arc(oThis.loc.x, oThis.loc.y, radius, 0, Math.PI*2);
-    //oThis.ctx.rect(oThis.loc.x, oThis.loc.y, 5, 5);
-	oThis.ctx.moveTo(oThis.preX, oThis.preY);
-	oThis.ctx.lineTo(oThis.loc.x, oThis.loc.y);
-	oThis.ctx.closePath();
-    
-	oThis.ctx.fill();
-	oThis.ctx.stroke();			
-
-	oThis.preX = oThis.loc.x;
-	oThis.preY = oThis.loc.y;
-}
-
-Pencel.prototype.afterDraw = function(e) {
-	
-}
-Pencel.prototype.focusOut = function(e) {
-	
-}
-Pencel.prototype.move = function(e) {
-	
-}
-Pencel.prototype.saveDrawingSurface = function() {	
-	this.parent.setSurfaceData(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));	
-}
-Pencel.prototype.incLineWidth = function() {
-	this.lineWidth++;
-}
-Pencel.prototype.decLineWidth = function() {
-	this.lineWidth--;
+Pencel.prototype = {
+		init: function(e) {
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			this.preX = this.loc.x;
+			this.preY = this.loc.y;	
+		},
+		
+		draw: function(e) {
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			
+			this.ctx.strokeStyle = this.parent.getColor();		
+			this.ctx.lineWidth = this.lineWidth;
+		
+			this.ctx.beginPath();
+		    //oThis.ctx.arc(oThis.loc.x, oThis.loc.y, radius, 0, Math.PI*2);
+		    //oThis.ctx.rect(oThis.loc.x, oThis.loc.y, 5, 5);
+			this.ctx.moveTo(this.preX, this.preY);
+			this.ctx.lineTo(this.loc.x, this.loc.y);
+			this.ctx.closePath();
+		    
+			this.ctx.fill();
+			this.ctx.stroke();			
+		
+			this.preX = this.loc.x;
+			this.preY = this.loc.y;
+		},
+		
+		afterDraw: function(e) {
+			this.saveDrawingSurface();
+		},
+		focusOut: function(e) {
+			
+		},
+		move: function(e) {
+			
+		},
+		saveDrawingSurface: function() {	
+			this.parent.setSurfaceData(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));	
+		},
+		incLineWidth: function() {
+			this.lineWidth++;
+		},
+		decLineWidth: function() {
+			this.lineWidth--;
+		},
+		
+		finish: function() {
+			
+		}
 }
 
 /** Eraser Class **/
@@ -95,75 +396,81 @@ var Eraser = function(parent, canvas, ctx) {
 	this.eraseY = 0;	
 }
 
-Eraser.prototype.init = function(e) {
-	this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
-	this.preX = this.loc.x;
-	this.preY = this.loc.y;	
-}
-
-Eraser.prototype.draw = function(e) {
-	this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
-	
-	this.ctx.strokeStyle = "gray";
-	this.ctx.lineWidth = "1";
-	this.ctx.beginPath();
-	this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);								
-	this.ctx.rect(this.loc.x-this.lineWidth/2, this.loc.y-this.lineWidth/2, this.lineWidth, this.lineWidth);				
-	this.ctx.closePath();
-	this.ctx.stroke();
-	this.eraseX = this.loc.x;
-	this.eraseY = this.loc.y;
-}
-
-Eraser.prototype.afterDraw = function(e) {
-	this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
-	this.ctx.beginPath();
-	this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);
-	this.ctx.clearRect((this.loc.x-this.lineWidth/2)-1, (this.loc.y-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);
-	this.ctx.closePath();
-	this.saveDrawingSurface();
-}
-Eraser.prototype.focusOut = function(e) {
-	this.ctx.beginPath();
-	this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);				
-	this.ctx.closePath();
-	this.saveDrawingSurface();
-}
-Eraser.prototype.move = function(e) {
-	this.restoreDrawingSurface();
-	
-	this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
-	
-	this.ctx.strokeStyle = "gray";
-	this.ctx.lineWidth = "1";
-	this.ctx.beginPath();
-	//this.ctx.clearRect((this.eraseX-this.eraseWidth/2)-1, (this.eraseY-this.eraseHeight/2)-1, Number(this.eraseWidth)+2, Number(this.eraseHeight)+2);								
-	this.ctx.rect(this.loc.x-this.lineWidth/2, this.loc.y-this.lineWidth/2, this.lineWidth, this.lineWidth);				
-	this.ctx.closePath();
-	this.ctx.stroke();
-	this.eraseX = this.loc.x;
-	this.eraseY = this.loc.y;
-}
-Eraser.prototype.restoreDrawingSurface = function() {	
-	var drawingSurfaceData = this.parent.getSurfaceData();
-	var ratioW = drawingSurfaceData.width / this.canvas.width;
-	var ratioH = drawingSurfaceData.height / this.canvas.height;
-	
-	var width = this.lineWidth*ratioW;
-	var height = this.lineWidth*ratioH;
-	
-	this.ctx.putImageData(this.parent.getSurfaceData(), 0, 0
-			, (this.eraseX-width/2)-1, (this.eraseY-height/2)-1
-			, Number(width)+2, Number(height)+2);
-}
-Eraser.prototype.saveDrawingSurface = function() {	
-	this.parent.setSurfaceData(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));	
-}
-Eraser.prototype.incLineWidth = function() {
-	this.lineWidth++;
-}
-Eraser.prototype.decLineWidth = function() {
-	this.lineWidth--;
+Eraser.prototype = {
+		init: function(e) {
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			this.preX = this.loc.x;
+			this.preY = this.loc.y;	
+		},
+		
+		draw: function(e) {
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			
+			this.ctx.strokeStyle = "gray";
+			this.ctx.lineWidth = "1";
+			this.ctx.beginPath();
+			this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);								
+			this.ctx.rect(this.loc.x-this.lineWidth/2, this.loc.y-this.lineWidth/2, this.lineWidth, this.lineWidth);				
+			this.ctx.closePath();
+			this.ctx.stroke();
+			this.eraseX = this.loc.x;
+			this.eraseY = this.loc.y;
+		},
+		
+		afterDraw: function(e) {
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			this.ctx.beginPath();
+			this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);
+			this.ctx.clearRect((this.loc.x-this.lineWidth/2)-1, (this.loc.y-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);
+			this.ctx.closePath();
+			this.saveDrawingSurface();
+		},
+		focusOut: function(e) {
+			this.ctx.beginPath();
+			this.ctx.clearRect((this.eraseX-this.lineWidth/2)-1, (this.eraseY-this.lineWidth/2)-1, Number(this.lineWidth)+2, Number(this.lineWidth)+2);				
+			this.ctx.closePath();
+			this.saveDrawingSurface();
+		},
+		move: function(e) {
+			this.restoreDrawingSurface();
+			
+			this.loc = windowToCanvas(this.canvas, e.clientX, e.clientY);
+			
+			this.ctx.strokeStyle = "gray";
+			this.ctx.lineWidth = "1";
+			this.ctx.beginPath();
+			//this.ctx.clearRect((this.eraseX-this.eraseWidth/2)-1, (this.eraseY-this.eraseHeight/2)-1, Number(this.eraseWidth)+2, Number(this.eraseHeight)+2);								
+			this.ctx.rect(this.loc.x-this.lineWidth/2, this.loc.y-this.lineWidth/2, this.lineWidth, this.lineWidth);				
+			this.ctx.closePath();
+			this.ctx.stroke();
+			this.eraseX = this.loc.x;
+			this.eraseY = this.loc.y;
+		},
+		restoreDrawingSurface: function() {	
+			var drawingSurfaceData = this.parent.getSurfaceData();
+			var ratioW = drawingSurfaceData.width / this.canvas.width;
+			var ratioH = drawingSurfaceData.height / this.canvas.height;
+			
+			var width = this.lineWidth*ratioW;
+			var height = this.lineWidth*ratioH;
+			
+			this.ctx.putImageData(this.parent.getSurfaceData(), 0, 0
+					, (this.eraseX-width/2)-1, (this.eraseY-height/2)-1
+					, Number(width)+2, Number(height)+2);
+		},
+		saveDrawingSurface: function() {	
+			this.parent.setSurfaceData(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));	
+		},
+		incLineWidth: function() {
+			this.lineWidth++;
+		},
+		decLineWidth: function() {
+			this.lineWidth--;
+		},
+		
+		finish: function() {
+			
+		}
 }
 
 
@@ -227,6 +534,7 @@ var Drawing = function(boxTag, width, height, imgSrc) {
 	
 	this.pencilObj = new Pencel(this, this.canvas, this.ctx);
 	this.eraserObj = new Eraser(this, this.canvas, this.ctx);
+	this.textObj = new Text(this, this.canvas, this.ctx);
 	this.currentTool = this.pencilObj;
 	
 	this.$box.prepend(this.makeToolBox());
@@ -237,227 +545,247 @@ var Drawing = function(boxTag, width, height, imgSrc) {
 	}
 }
 
-Drawing.prototype.init = function() {
-	this.bindEvents();
-}
-
-Drawing.prototype.getColor = function() {
-	return this.color;
-}
-
-Drawing.prototype.getSurfaceData = function() {
-	return this.drawingSurfaceData;
-}
-Drawing.prototype.setSurfaceData = function(drawingSurfaceData) {
-	this.drawingSurfaceData = drawingSurfaceData;
-}
-
-Drawing.prototype.whenLoadImage = function(thiz) {	
-	this.ctx.drawImage(thiz,0,0);
-}
-
-Drawing.prototype.bindEvents = function() {
-	var oThis = this;
-	
-	oThis.canvas.onmousedown = function(e) {
-		stopEvent(e);
-		oThis.whenMouseDown(e);
-	}
-	oThis.canvas.onmouseup = function(e) {
-		stopEvent(e);
-		oThis.whenMouseUp(e);
-	}		
-	oThis.canvas.onmousemove = function(e) {
-		stopEvent(e);
-		oThis.whenMouseMove(e);
-	}
-	
-	$(oThis.canvas).mouseleave(function(e) {
-		oThis.isMouseDown = false;
+Drawing.prototype = {
+		init: function() {
+			this.bindEvents();
+		},
 		
-		oThis.currentTool.focusOut();		
-	});
-	
-	$("#freeLineBtn_"+oThis.canvasId).click(function() {
-		oThis.clickFreeLine(this);
-	});
-	
-	$("#eraserBtn_"+oThis.canvasId).click(function() {
-		oThis.clickEraser(this);
-	});	
-	
-	$("#plusBtn_"+oThis.canvasId).click(function() {		
-		oThis.clickPlusBtn();
-	});
+		getColor: function() {
+			return this.color;
+		},
 		
-	$("#minusBtn_"+oThis.canvasId).click(function() {
-		oThis.clickMinusBtn();
-	});
-	
-	$("#eraseAllBtn_"+oThis.canvasId).click(function() {
-		oThis.clickEraseAll();
-	});
-	
-	$("#colorBtn_"+oThis.canvasId).click(function() {
-		if($("#colorBox_"+oThis.canvasId).is(":visible")) {
-			$("#colorBox_"+oThis.canvasId).hide();
-		} else {
-			$("#colorBox_"+oThis.canvasId).show();
-		}
-	});
-	
-	oThis.$box.find(".colorDiv").click(function(e) {
-		oThis.color = $(this).attr('id'); 
-		$("#colorBtn_"+oThis.canvasId).css('background', oThis.color);
-		$("#colorBox_"+oThis.canvasId).hide();
-	});
-}
-
-Drawing.prototype.whenMouseDown = function(e) {
-	this.currentTool.init(e);
+		getSurfaceData: function() {
+			return this.drawingSurfaceData;
+		},
+		setSurfaceData: function(drawingSurfaceData) {
+			this.drawingSurfaceData = drawingSurfaceData;
+		},
+		
+		whenLoadImage: function(thiz) {	
+			this.ctx.drawImage(thiz,0,0);
+		},
+		
+		bindEvents: function() {
+			var oThis = this;
 			
-	this.isMouseDown = true;	
-	$("#colorBox_"+this.canvasId).hide();
-}
-Drawing.prototype.whenMouseUp = function(e) {
-	var oThis = this;
-	oThis.isMouseDown = false;
-	
-	this.currentTool.afterDraw(e);	
-}
-Drawing.prototype.whenMouseMove = function(e) {
-	var oThis = this;	
-	
-	if(oThis.isMouseDown) {
-		oThis.currentTool.draw(e);		
-	} else {
-		//oThis.currentTool.restoreDrawingSurface();
-		oThis.currentTool.move(e);
-	}
-}
-
-Drawing.prototype.saveDrawingSurface = function() {
-	var oThis = this;
-	oThis.drawingSurfaceData = oThis.ctx.getImageData(0, 0, oThis.canvas.width, oThis.canvas.height);
-}
-
-Drawing.prototype.restoreDrawingSurfaceAll = function() {
-	var oThis = this;
-	oThis.ctx.putImageData(oThis.drawingSurfaceData, 0, 0);
-}
-
-Drawing.prototype.makeCanvas = function() {
-	var canvas = "";
-	canvas += "<canvas id='"+this.canvasId+"' width='"+this.width+"' height='"+this.height+"' style='"+this.canvasStyle+"'>";
-	canvas += "</canvas>";
-	return canvas;
-}
-
-Drawing.prototype.makeHiddenInput = function(name) {		
-	var input = "<input type='hidden' name='"+name+"' />";
-	return input;
-}
-
-Drawing.prototype.makeToolBox = function() {
-	
-	var div = "";
-	div += "<div style='width:100%;'>";		
-		div += "<div style='float:left; margin-right:10px;'>";
-			div += "<div class='toolBtn' id='freeLineBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"pencil.png\"); border-width:3px;'></div>";		
-			div += "<div class='toolBtn' id='eraserBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"eraser.png\");'></div>";
-		div += "</div>";
-		
-		div += "<div style='float:left; margin-right:10px;'>";				
-			div += "<div class='toolBtn2' id='plusBtn_"+this.canvasId+"' style='"+this.toolBtnStyle2+"'>+</div>";
-			div += "<div class='toolBtn2' id='minusBtn_"+this.canvasId+"' style='"+this.toolBtnStyle2+"'>-</div>";
-			div += "<div id='txtWidth' class='toolBtn2' onclick='' style='"+this.toolBtnStyle2+"'>"+this.currentTool.lineWidth+"</div>";
-		div += "</div>";
-		
-		div += "<div style='float:left; margin-right:10px; position:relative;'>";
-			div += "<div class='toolBtn' id='colorBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background:black;'></div>";
-			div += "<div id='colorBox_"+this.canvasId+"' style='display:none; position:absolute; top:26px; width:240px;'>";			
-			for(var i=0; i<this.colorArr.length; i++) {
-				div += "<div style='float:left;background:white;'>";				
-				for(var j=0; j<this.colorArr[i].length; j++) {
-					div += "<div class='colorDiv' style='cursor:pointer;margin:0 1px 1px 0; width:16px; height:16px; background:"+this.colorArr[i][j]+";' id='"+this.colorArr[i][j]+"'></div>";
-				}
-				div += "</div>";
+			oThis.canvas.onmousedown = function(e) {
+				stopEvent(e);
+				oThis.whenMouseDown(e);
 			}
-			div += "</div>";
-		div += "</div>";
-		
-		div += "<div style='float:left; margin-right:10px;'>";
-			div += "<div class='toolBtn' id='eraseAllBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"eraseAll.png\");'></div>";
-		div += "</div>";
-	div += "</div>";
-	
-	return div;
-}
-
-Drawing.prototype.clickFreeLine = function(pThis) {
-	var oThis = this;
-		
-	this.currentTool = this.pencilObj;
-	oThis.resetToolBtn();
-	oThis.whenSelectBtn($(pThis));
+			oThis.canvas.onmouseup = function(e) {
+				stopEvent(e);
+				oThis.whenMouseUp(e);
+			}		
+			oThis.canvas.onmousemove = function(e) {
+				stopEvent(e);
+				oThis.whenMouseMove(e);
+			}
 			
-	oThis.resetTxtWidth(oThis.lineWidth);			
-	
-	oThis.currentTool.saveDrawingSurface();
-}
-
-Drawing.prototype.clickEraseAll = function(pThis) {
-	var oThis = this;
-	oThis.ctx.clearRect(0, 0, oThis.canvas.width, oThis.canvas.height);
-	oThis.saveDrawingSurface();
-}
-
-Drawing.prototype.clickEraser = function(pThis) {
-	var oThis = this;
-	//oThis.strokeType = "eraser";
-	this.currentTool = this.eraserObj;
-	this.resetToolBtn();
-	this.whenSelectBtn($(pThis));
-	
-	this.resetTxtWidth();		
-	
-	this.currentTool.saveDrawingSurface();
-}
-
-Drawing.prototype.clickPlusBtn = function() {
-	oThis = this;
-	this.currentTool.incLineWidth();
-	this.resetTxtWidth();	
-}
-
-Drawing.prototype.clickMinusBtn = function() {
-	oThis = this;
-	this.currentTool.decLineWidth();
-	this.resetTxtWidth();
-}
-
-Drawing.prototype.resetTxtWidth = function() {
-	this.$box.find("#txtWidth").text(this.currentTool.lineWidth);
-}
-
-Drawing.prototype.resetToolBtn = function() {	
-	this.$box.find(".toolBtn").css("border-width", "1px");
-}
-
-Drawing.prototype.whenSelectBtn = function($btn) {
-	$btn.css("border-width", "3px");
-}
-
-Drawing.prototype.setImgByte = function() {	
-	var imgData = this.canvas.toDataURL("image/png");
-	imgData = imgData.replace("data:image/png;base64,", "");
-	
-	this.$box.find("input:hidden[name="+this.name+"]").val(imgData);
-}
-
-Drawing.prototype.save = function(formTag) {
-	this.setImgByte();
-	var $form = $("#"+formTag);
-	
-	$form.submit();
+			$(oThis.canvas).mouseleave(function(e) {
+				oThis.isMouseDown = false;
+				
+				oThis.currentTool.focusOut();		
+			});
+			
+			$("#freeLineBtn_"+oThis.canvasId).click(function() {
+				oThis.clickFreeLine(this);
+			});	
+			$("#eraserBtn_"+oThis.canvasId).click(function() {
+				oThis.clickEraser(this);
+			});
+			$("#textBtn_"+oThis.canvasId).click(function() {
+				oThis.clickText(this);
+			});
+			
+			
+			$("#plusBtn_"+oThis.canvasId).click(function() {		
+				oThis.clickPlusBtn();
+			});
+				
+			$("#minusBtn_"+oThis.canvasId).click(function() {
+				oThis.clickMinusBtn();
+			});
+			
+			$("#eraseAllBtn_"+oThis.canvasId).click(function() {
+				oThis.clickEraseAll();
+			});
+			
+			$("#colorBtn_"+oThis.canvasId).click(function() {
+				if($("#colorBox_"+oThis.canvasId).is(":visible")) {
+					$("#colorBox_"+oThis.canvasId).hide();
+				} else {
+					$("#colorBox_"+oThis.canvasId).show();
+				}
+			});
+			
+			oThis.$box.find(".colorDiv").click(function(e) {
+				oThis.color = $(this).attr('id'); 
+				$("#colorBtn_"+oThis.canvasId).css('background', oThis.color);
+				$("#colorBox_"+oThis.canvasId).hide();
+			});
+		},
+		
+		whenMouseDown: function(e) {
+			this.currentTool.init(e);
+					
+			this.isMouseDown = true;	
+			$("#colorBox_"+this.canvasId).hide();
+		},
+		whenMouseUp: function(e) {
+			var oThis = this;
+			oThis.isMouseDown = false;
+			
+			this.currentTool.afterDraw(e);	
+		},
+		whenMouseMove: function(e) {
+			var oThis = this;	
+			
+			if(oThis.isMouseDown) {
+				oThis.currentTool.draw(e);		
+			} else {
+				//oThis.currentTool.restoreDrawingSurface();
+				oThis.currentTool.move(e);
+			}
+		},
+		
+		saveDrawingSurface: function() {
+			var oThis = this;
+			oThis.drawingSurfaceData = oThis.ctx.getImageData(0, 0, oThis.canvas.width, oThis.canvas.height);
+		},
+		
+		restoreDrawingSurfaceAll: function() {
+			var oThis = this;
+			oThis.ctx.putImageData(oThis.drawingSurfaceData, 0, 0);
+		},
+		
+		makeCanvas: function() {
+			var canvas = "";
+			canvas += "<canvas id='"+this.canvasId+"' width='"+this.width+"' height='"+this.height+"' style='"+this.canvasStyle+"'>";
+			canvas += "</canvas>";
+			return canvas;
+		},
+		
+		makeHiddenInput: function(name) {		
+			var input = "<input type='hidden' name='"+name+"' />";
+			return input;
+		},
+		
+		makeToolBox: function() {
+			
+			var div = "";
+			div += "<div style='width:100%;'>";		
+				div += "<div style='float:left; margin-right:10px;'>";
+					div += "<div class='toolBtn' id='freeLineBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"pencil.png\"); border-width:3px;'></div>";		
+					div += "<div class='toolBtn' id='eraserBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"eraser.png\");'></div>";
+					div += "<div class='toolBtn' id='textBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"text.png\");'></div>";
+				div += "</div>";
+				
+				div += "<div style='float:left; margin-right:10px;'>";				
+					div += "<div class='toolBtn2' id='plusBtn_"+this.canvasId+"' style='"+this.toolBtnStyle2+"'>+</div>";
+					div += "<div class='toolBtn2' id='minusBtn_"+this.canvasId+"' style='"+this.toolBtnStyle2+"'>-</div>";
+					div += "<div id='txtWidth' class='toolBtn2' onclick='' style='"+this.toolBtnStyle2+"'>"+this.currentTool.lineWidth+"</div>";
+				div += "</div>";
+				
+				div += "<div style='float:left; margin-right:10px; position:relative;'>";
+					div += "<div class='toolBtn' id='colorBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background:black;'></div>";
+					div += "<div id='colorBox_"+this.canvasId+"' style='display:none; position:absolute; top:26px; width:240px;'>";			
+					for(var i=0; i<this.colorArr.length; i++) {
+						div += "<div style='float:left;background:white;'>";				
+						for(var j=0; j<this.colorArr[i].length; j++) {
+							div += "<div class='colorDiv' style='cursor:pointer;margin:0 1px 1px 0; width:16px; height:16px; background:"+this.colorArr[i][j]+";' id='"+this.colorArr[i][j]+"'></div>";
+						}
+						div += "</div>";
+					}
+					div += "</div>";
+				div += "</div>";
+				
+				div += "<div style='float:left; margin-right:10px;'>";
+					div += "<div class='toolBtn' id='eraseAllBtn_"+this.canvasId+"' style='"+this.toolBtnStyle+" background-image:url(\""+this.imgUrlPath+"eraseAll.png\");'></div>";
+				div += "</div>";
+			div += "</div>";
+			
+			return div;
+		},
+		
+		changeTool: function(toolObj) {
+			this.currentTool.finish();
+			this.currentTool = toolObj;
+		},
+		
+		clickFreeLine: function(pThis) {
+			if(this.getSurfaceData() != null) {
+				this.ctx.putImageData(this.getSurfaceData(), 0, 0);
+			}
+			this.changeTool(this.pencilObj);
+			this.resetToolBtn();
+			this.whenSelectBtn($(pThis));
+					
+			this.resetTxtWidth(this.lineWidth);			
+			
+			this.currentTool.saveDrawingSurface();
+		},
+		clickEraser: function(pThis) {	
+			if(this.getSurfaceData() != null) {
+				this.ctx.putImageData(this.getSurfaceData(), 0, 0);
+			}
+			this.changeTool(this.eraserObj);
+			this.resetToolBtn();
+			this.whenSelectBtn($(pThis));
+			
+			this.resetTxtWidth();		
+			
+			this.currentTool.saveDrawingSurface();
+		},
+		clickText: function(pThis) {
+			if(this.getSurfaceData() != null) {
+				this.ctx.putImageData(this.getSurfaceData(), 0, 0);
+			}	
+			this.changeTool(this.textObj);
+			this.resetToolBtn();
+			this.whenSelectBtn($(pThis));
+			
+			this.resetTxtWidth();		
+			
+			this.currentTool.saveDrawingSurface();
+		},
+		clickEraseAll: function() {	
+			this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+			this.saveDrawingSurface();
+		},
+		
+		clickPlusBtn: function() {	
+			this.currentTool.incLineWidth();
+			this.resetTxtWidth();	
+		},
+		
+		clickMinusBtn: function() {	
+			this.currentTool.decLineWidth();
+			this.resetTxtWidth();
+		},
+		
+		resetTxtWidth: function() {
+			this.$box.find("#txtWidth").text(this.currentTool.lineWidth);
+		},
+		
+		resetToolBtn: function() {	
+			this.$box.find(".toolBtn").css("border-width", "1px");
+		},
+		
+		whenSelectBtn: function($btn) {
+			$btn.css("border-width", "3px");
+		},
+		
+		setImgByte: function() {	
+			var imgData = this.canvas.toDataURL("image/png");
+			imgData = imgData.replace("data:image/png;base64,", "");
+			
+			this.$box.find("input:hidden[name="+this.name+"]").val(imgData);
+		},
+		
+		save: function(formTag) {
+			this.setImgByte();
+			var $form = $("#"+formTag);
+			
+			$form.submit();
+		}
 }
